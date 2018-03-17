@@ -1,106 +1,8 @@
-#include <pcap.h>  
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <string.h>
-#include <netinet/udp.h> 
-#include <netinet/ip.h>
-#include <netinet/ether.h>
-#include <sys/ioctl.h>
-#include <net/if.h>
-#include <linux/if_packet.h>
-
-
-#define ETH_HEAD_LEN 14
-#define UDP_HEAD_LEN 8
-#define IP_HEAD_LEN 20
-#define INT_DEF "enp2s0f0"
-#define IP_SOURCE "192.168.1.3"
-
-void print_ip(int ip)
-{
-    unsigned char bytes[4];
-    bytes[0] = ip & 0xFF;
-    bytes[1] = (ip >> 8) & 0xFF;
-    bytes[2] = (ip >> 16) & 0xFF;
-    bytes[3] = (ip >> 24) & 0xFF;   
-    printf("ip: %d.%d.%d.%d\n", bytes[3], bytes[2], bytes[1], bytes[0]);        
-}
-
-
-unsigned short csum(unsigned short *ptr, int nbytes) 
-{
-    register long sum;
-    unsigned short oddbyte;
-    unsigned short answer;
-    sum=0;
-    while(nbytes>1) {
-        sum+=*ptr++;
-        nbytes-=2;
-    }
-    if(nbytes==1) {
-        oddbyte=0;
-        *((u_char*)&oddbyte)=*(u_char*)ptr;
-        sum+=oddbyte;
-    }
-    sum = (sum>>16)+(sum & 0xffff);
-    sum = sum + (sum>>16);
-    answer=(short)~sum;
-    return(answer);
-}
-
-int sendETHIPUDP(int s, struct udphdr udph, struct iphdr iph, struct ether_header ethh, char * data, int data_lenght, struct sockaddr_ll serv, socklen_t serv_lenght){
-	unsigned char * buffer;
-	char * ip_h_check;
-	int res;
-	unsigned char h_lenght_udp;
-	unsigned char h_lenght_ip;
-	unsigned char h_lenght_eth;
-	unsigned int pac_lenght;
-
-	h_lenght_eth = sizeof(ethh);
-	h_lenght_udp = sizeof(udph);
-	h_lenght_ip = sizeof(iph);
-	pac_lenght = h_lenght_udp + data_lenght;
-	udph.check = 0;
-	if(!udph.len) udph.len = htons(pac_lenght);
-
-	pac_lenght = h_lenght_ip + h_lenght_udp + data_lenght;
-	if(!iph.tot_len) iph.tot_len = htons(pac_lenght);
-
-	pac_lenght = h_lenght_eth + h_lenght_ip + h_lenght_udp + data_lenght;
-
-
-	buffer = (char *)calloc(pac_lenght, sizeof(char));
-	ip_h_check = (char *)malloc(h_lenght_ip);
-
-	memcpy(buffer, &ethh, h_lenght_eth);
-	memcpy(ip_h_check, &iph, h_lenght_ip);
-	iph.check = csum((unsigned short *) ip_h_check, IP_HEAD_LEN);
-	//memcpy(buffer, &iph, h_lenght_ip);
-	memcpy(buffer + h_lenght_eth, &iph, h_lenght_ip);
-	memcpy(buffer + h_lenght_eth + h_lenght_ip, &udph, h_lenght_udp);
-
-	if(data) memcpy(buffer + h_lenght_eth + h_lenght_udp + h_lenght_ip, data, data_lenght);
-	//iph.check = csum((unsigned short *) buffer, ntohs(iph.tot_len));
-	printf("Check Sum: %d\n", iph.check);
-
-	res = sendto(s, buffer, pac_lenght, 0, (struct sockaddr *) &serv, serv_lenght); 
-	for(int i = 0; i < pac_lenght; i++)
-		printf("%x ", buffer[i]);
-	return res;
-
-
-} 
+#include "../head/raw_eth.h"
 
 int main(int argc, char **argv) {
-	int s, read_bytes, send_udp, str_len, str_len_r_buf;
-	socklen_t client_lenght, server_lenght;
-	//struct sockaddr_in server_addr;
+	int s, read_bytes, send_udp;
+	socklen_t server_lenght;
 	struct sockaddr_ll socket_address;
 	struct udphdr udp_h;
 	struct iphdr ip_h;
@@ -110,10 +12,9 @@ int main(int argc, char **argv) {
 	char inter_name[IFNAMSIZ];
 	struct ifreq if_idx, if_mac;
 
-	char buf[6], *a;
-	char ip_s[32], ip_d_char[32];
+	char buf[6];
+	char ip_s[32];
 	unsigned char msg1[ETH_HEAD_LEN + IP_HEAD_LEN + UDP_HEAD_LEN + 20];
-	char msg2[] = "Hello!";
 	unsigned short port = 0;
 	uint32_t ip_d = 0;
 	uint8_t mac_addr[6];
@@ -135,15 +36,11 @@ int main(int argc, char **argv) {
 	printf("Sending to MAC %02x:%02x:%02x:%02x:%02x:%02x from %s interface\n", mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5], inter_name);
 
 
-
-
-
 	s = socket (AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
 	if (s < 0) {
 		perror("Couldn't creat socket \n");
 		exit(EXIT_FAILURE);	
 	}
-
 
 	memset(&if_idx, 0, sizeof(struct ifreq));
 	strncpy(if_idx.ifr_name, inter_name, IFNAMSIZ - 1);
@@ -193,8 +90,6 @@ int main(int argc, char **argv) {
 	ip_h.saddr = inet_addr(ip_s);
 	ip_h.daddr = inet_addr("192.168.1.6");
 
-
-
 	udp_h.source = htons(65533);
 	udp_h.dest = htons(65531);
 	udp_h.len = 0;
@@ -208,13 +103,11 @@ int main(int argc, char **argv) {
 		while(1) {
 			read_bytes = recvfrom(s, &msg1, 1024, 0, (struct sockaddr *)&socket_address, &server_lenght);
 			printf("read_bytes: %d\n", read_bytes);
-			
 
 			struct ether_header *eth_h_rec = (struct ether_header *)(msg1);
 			struct iphdr *ip_h_rec = (struct iphdr *)(msg1 + ETH_HEAD_LEN);
 			struct udphdr *udp_h_rec = (struct udphdr *)(msg1 + ETH_HEAD_LEN + IP_HEAD_LEN);
 			
-
 			port = ntohs(udp_h_rec->dest);
 			ip_d = ntohl(ip_h_rec->daddr);
 			ip_addr.s_addr = ip_d;

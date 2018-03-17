@@ -73,11 +73,18 @@ int main(int argc, char **argv) {
 			read_bytes = recvfrom(s, &msg1, 1024, 0, (struct sockaddr *)&server_addr, &server_lenght);
 			printf("read_bytes: %d\n", read_bytes);
 			
+			//strncpy(port1, msg1 + 22, 2);
 			port = msg1[22] <<8|msg1[23];
 			printf("%d\n",port );
+			printf("%s\n",port1 );
 
+			//strncpy(&port, msg1 + 22, 2);
+			//strncpy(port1, msg1 + 22, 2);
 			if(read_bytes >= 0)
 				if(port == ntohs(udp_h.source))
+				//if(port == 65533)
+				//if(msg1[22]==0xff) 
+					//if(msg1[23]==0xfd) 
 						printf("%s\n", msg1 + 28);		
 		}
 		

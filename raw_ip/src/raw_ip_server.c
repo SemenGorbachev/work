@@ -1,22 +1,13 @@
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <string.h>
+#include "../head/raw_ip.h"
 
-
-int main() {
+int main(int argc, char **argv) {
 	int s, read_bytes, portClient;
 	socklen_t client_lenght, serv_lenght;
 	struct sockaddr_in serv_addr, client_addr;
 	char buf[1024];
-	char *str, *some_addr;
+	char *some_addr;
 	char recv[] = "hi!";
 
-	str = (char *)malloc(1024);
 	some_addr = (char *)malloc(6);
 
 	s = socket (AF_INET, SOCK_DGRAM, 0);
@@ -28,7 +19,7 @@ int main() {
 	serv_addr.sin_port = htons(65531);
 	serv_addr.sin_family = AF_INET;
 	//serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-	serv_addr.sin_addr.s_addr = inet_addr("127.0.0.2");
+	serv_addr.sin_addr.s_addr = inet_addr (argv[1]);
 	
 	if (bind(s, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
 		perror("bind");
