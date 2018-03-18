@@ -9,6 +9,8 @@
 #include <netinet/udp.h> 
 #include <netinet/ip.h>
 #include <netinet/ip_icmp.h>
+#include <sys/select.h>
+#include <time.h>
 
 #define UDP_HEAD_LEN 8
 #define IP_HEAD_LEN 20
